@@ -5,53 +5,49 @@ char x;
 
 #define bitanzahl 5
 #define mask ((1<<bitanzahl) - 1)
-#define S1M (1<<4)
-#define S2M (1<<5)
-
-#define SCHALTERMASK (S1M|S2M)
-
-int ct;
-volatile char ein;
-int speeds[4] = {10,20,50, 100};
-volatile unsigned char aktualSpeed;
 
 ISR(INT4_vect) {
-    ein = !ein;
+    //TODO Muster wechseln
+
 }
-ISR(INT5_vect) {
-    aktualSpeed = (aktualSpeed+1)%4;
+ISR(PCINT1_vect) {
+    //TODO Auswertung des Inkrementalgebers
+    unsigned char ig;
+    ig = PINJ & 0x03;
+    static unsigned char ig_alt=0;
+    // Auswerten von Flanke auf A
+    if ( !(ig_alt&(1<<0)) && (ig&(1<<0)) ) {
+        if (ig&(1<<1)) {
+            // links
+            x <<= 1;
+            if (x > mask) x = 1;
+        } else {
+            //rechts
+            x >>= 1;
+            if (x == 0) x = 1<<(bitanzahl-1);
+        }
+    }
+    ig_alt=ig;
 }
 
 void setup() {
-    //DDRK = 0b011111;
-    //DDRK = 0x1F;
     DDRK = mask;
     x = 1;
 
     DDRE  = 0;       // ganzer PortE als Eingang
-    PORTE = SCHALTERMASK;  // Pull-Up für alle Schalter
+    DDRJ  = 0;       // ganzer PortJ als Eingang
 
-    ct  = 0;
-    ein = 0;
-    aktualSpeed = 1;
+    // EXT-INT
+    EICRB = (2<<ISC40);
+    EIMSK = (1<<INT4);
 
-    EICRB = (2<<ISC40) | (2<<ISC50);
-    EIMSK = (1<<INT4)  | (1<<INT5);
+    // PCINT
+    PCICR  = 1<<PCIE1;
+    PCMSK1 = (1<<PCINT9) | (1<<PCINT10);
+
     sei();
 }
 
 void loop() {
-    if (ein) {
-        PORTK = (PORTK & ~mask) | (x & mask);
-        delay(10);
-        if (++ct>=speeds[aktualSpeed]) {
-            x <<= 1;
-            if (x > mask) x = 1;
-            ct=0;
-        }
-    } else {
-        PORTK = (PORTK & ~mask);
-        ct = 0;
-        x  = 1;
-    }
+    PORTK = (PORTK & ~mask) | (x & mask);
 }
